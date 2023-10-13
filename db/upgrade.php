@@ -640,9 +640,40 @@ function xmldb_attendance_upgrade($oldversion=0) {
 
     if ($oldversion < 2021050700) {
         // Restore process sometimes creates orphan attendance calendar events - clean them up.
-        $sql = "modulename = 'attendance' AND id NOT IN (SELECT caleventid
-                                                           FROM {attendance_sessions})";
-        $DB->delete_records_select('event', $sql);
+
+        // Start a new database transaction
+        $transaction = $DB->start_delegated_transaction();
+
+        // Create new table with all event records except attendance module.
+        $sql = 'CREATE TABLE {event}_att_2021050700_temp AS
+                    SELECT *
+                    FROM {event}
+                    WHERE modulename <> \'attendance\'';
+        $DB->execute($sql);
+        // Copy the attendance event records (only those which JOIN match on ids).
+        $sql = 'INSERT INTO {event}_att_2021050700_temp 
+                    SELECT * FROM 
+                    (SELECT e.* FROM {event} e
+                    JOIN {attendance_sessions} atts 
+                    ON e.modulename = \'attendance\' 
+                    AND e.id = atts.caleventid)';
+        $DB->execute($sql);
+
+        // Truncate the old table (faster than delete)
+        $sql = 'TRUNCATE {event}';
+        $DB->execute($sql);
+
+        // Reinsert the old records
+        $sql = 'INSERT INTO {evemt} 
+                    SELECT * FROM {event}_att_2021050700_temp';
+        $DB->execute($sql);
+
+        // Drop the "temporary" table.
+        $sql = 'DROP TABLE {event}_att_2021050700_temp';
+        $DB->execute($sql);
+
+        // Commit the transaction.
+        $transaction->allow_commit();
 
         // Attendance savepoint reached.
         upgrade_mod_savepoint(true, 2021050700, 'attendance');
