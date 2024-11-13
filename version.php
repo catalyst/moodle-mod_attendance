@@ -29,4 +29,4 @@ $plugin->requires = 2024041200; // Requires 4.4.
 $plugin->maturity  = MATURITY_STABLE;
 $plugin->cron     = 0;
 $plugin->component = 'mod_attendance';
-$plugin->supported = [404, 404];
+$plugin->supported = [404, 405];
